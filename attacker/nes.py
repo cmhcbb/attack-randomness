@@ -1,26 +1,30 @@
 import torch
 
-def nes_grad_est(x, p, sigma, n, N):
-	g = torch.zeros(n)
+def nes_grad_est(x, net, sigma=1e-5, n = 20):
+	g = torch.zeros(x.size()).cuda()
 	for _ in range(n):
-		u = torch.random.normal(zeros, I)
-		g += p(x + sigma * u) * u
-		g -= p(x - sigma * u) * u
+		u = torch.randn(g.size()).cuda()
+		out1, _ = net(x+sigma*u)
+		out2, _ = net(x-sigma*u)
+		g += torch.max(out1).item() * u
+		g -= torch.max(out2).item() * u
 	return 1/(2*sigma*n) * g
 
 
 def nes(x_in, y_true, net, steps, eps):
-	if eps = 0:
+	if eps == 0:
 		return x_in
-	training = net.training 
-	if training:
+	if net.training:
 		net.eval()
-	index = y_true.cpu().view(-1,1)
-	x_adv = x_in.clone().requries_grad_()
-	eps = torch.tensor(eps).view(1,1,1,1).cuda()
-	
-	for _ in range(steps):
-		x_adv = x_adv - theta * sign(nes_grad_est(x_in, p, sigma, n, N))
-		x_adv.clamp_(x_in - eps, x_in + eps)
+	x_adv = x_in.clone()
+	lr = 0.01
 
+	for i in range(steps):
+		print(f'\trunning step {i+1}/{steps} ...')
+		x_adv = x_adv + lr * torch.sign(nes_grad_est(x_in, net))
+		diff = x_adv - x_in
+		diff.clamp_(-eps, eps)
+		diff.clamp_(0.0, 1.0)
+		x_adv = x_in + diff
+	
 	return x_adv
