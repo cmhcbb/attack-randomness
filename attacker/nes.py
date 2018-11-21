@@ -12,7 +12,7 @@ def nes_grad_est(x, y, net, sigma=1e-5, n = 10):
 		out1, _ = net(x+sigma*u)
 		out2, _ = net(x-sigma*u)
 		out1 = out1.gather(1, y)
-		pdb.set_trace()
+		#pdb.set_trace()
 		out2 = out1.gather(1, y)
 		#print(f'out1.shape= {out1.shape}')
 		#o = out1 * u.view(N, -1)
