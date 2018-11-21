@@ -1,0 +1,4 @@
+Files already downloaded and verified
+Using attack NES on CIFAR10 vgg_adv_vi for eps = 0.05:
+batch 1/10
+	running step 1/100 ...

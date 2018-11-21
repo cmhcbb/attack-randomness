@@ -9,6 +9,8 @@ import torchvision.transforms as transforms
 import math
 import os
 import argparse
+import numpy as np
+import pdb
 
 from models.vgg import VGG
 from attacker.pgd import Linf_PGD, L2_PGD
@@ -59,7 +61,7 @@ shuffle=False, num_workers=2)
 		sigma_0 = 0.08
 		N = 50000
 		init_s = 0.08
-		model_out += "cifar10_vgg_adv_vi.pth"
+		model_out = "/home/thmle/checkpoint/cifar10_vgg_adv_vi.pth"
 		from models.vgg_vi import VGG
 		net = nn.DataParallel(VGG(sigma_0, N, init_s, 'VGG16', nclass, img_width=img_width).cuda())
 	elif opt.model == 'vi':
@@ -90,36 +92,49 @@ shuffle=False, num_workers=2)
 		print(f'Using attack {opt.attack} on CIFAR10 vgg_{opt.model} for eps = {eps}:')
 		success = 0
 		count = 0
-		max_iter = 1
+		max_iter = 10
 		distortion = 0.0
 		for it, (x, y) in enumerate(testloader):
 			if it+1 > max_iter:
 				continue
 			print(f'batch {it+1}/{max_iter}')
 			x, y = x.cuda(), y.cuda()
-			ori_pred = torch.max(softmax(net(x)[0]), dim=1)[1]
-			x_adv = attack_f(x, y, net, opt.steps, eps)
-			adv_pred = torch.max(softmax(net(x_adv)[0]), dim=1)[1]
-			is_adv = adv_pred.eq(ori_pred) == 0 
-			ori_pred_str = ''.join(map(str, ori_pred.cpu().numpy()))
-			adv_pred_str = ''.join(map(str, adv_pred.cpu().numpy()))
-			is_adv_str = ''.join(map(str, is_adv.cpu().numpy()))
-			y_true_str = ''.join(map(str, y.cpu().numpy()))
-			print(f'\ttrue image labels (y_true)    : {y_true_str}')
-			print(f'\toriginal images predicted     : {ori_pred_str}')
-			print(f'\tadversarial examples predicted: {adv_pred_str}')
-			print(f'\tis adversarial?                 {is_adv_str}')
-			new_success = torch.sum(is_adv).item()
-			new_distortion = distance(x_adv, x, is_adv, opt.attack)
-			print(f'\tsuccess = {new_success}, mean(distortion) = {new_distortion:.5f}')
-			success += new_success
-			if new_distortion > 0:
-				count += 1
-				distortion += new_distortion
+			y_out = torch.max(softmax(net(x)[0]), dim=1)[1]
+			#pdb.set_trace()
+			x_adv = attack_f(x, y_out, net, opt.steps, eps)
+			with torch.no_grad():
+				pred = torch.max(softmax(net(x_adv)[0]), dim=1)[1]
+				is_adv = pred.eq(y_out) == 0 
+				y_out_str = ''.join(map(str, y_out.cpu().numpy()))
+				pred_str = ''.join(map(str, pred.cpu().numpy()))
+				is_adv_str = ''.join(map(str, is_adv.cpu().numpy()))
+				y_true_str = ''.join(map(str, y.cpu().numpy()))
+				print(f'\ttrue image labels (y_true)    : {y_true_str}')
+				print(f'\toriginal images predicted     : {y_out_str}')
+				print(f'\tadversarial examples predicted: {pred_str}')
+				print(f'\tis adversarial?                 {is_adv_str}')
+				new_success = torch.sum(is_adv).item()
+				new_distortion = distance2(x_adv, x, is_adv.cpu().numpy(), opt.attack)
+				print(f'\tsuccess = {new_success}\n\tdistortion = {new_distortion}')
+				success += new_success
+				if len(new_distortion) > 0:
+					count += 1
+					distortion += np.mean(new_distortion)
 		if count == 0:
 			print('Found no adversarial examples!!!')
 		else:
 			print(f'Average distortion: {distortion/count}, average success rate = {success/(max_iter * batch_size)}')
+
+def distance2(x_adv, x, is_adv, attack):
+	diff = (x_adv - x).view(x.size(0), -1).cpu().numpy()
+	l2 = np.sum(diff*diff, axis=1) 
+	linf = np.max(np.abs(diff), axis=1)
+	if attack in ('CW', 'L2', 'NES'):
+		return l2[is_adv==1]
+	elif attack in ('Linf'):
+		return linf[is_adv==1]
+	else:
+		return [] 
 
 def distance(x_adv, x, is_adv, attack):
 	if is_adv.nonzero().size(0) == 0:
