@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.feat_noise import Noise
+from layers.sap import SAP
 
 cfg = {
     'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
@@ -13,10 +13,9 @@ cfg = {
 
 
 class VGG(nn.Module):
-    def __init__(self, vgg_name, nclass, noise_init, noise_inner, img_width=32):
+    def __init__(self, vgg_name, nclass, keep_ratio, img_width=32):
         super(VGG, self).__init__()
-        self.noise_init = noise_init
-        self.noise_inner = noise_inner
+        self.keep_ratio = keep_ratio
         self.img_width = img_width
         self.features = self._make_layers(cfg[vgg_name])
         self.classifier = nn.Linear(512, nclass)
@@ -31,25 +30,23 @@ class VGG(nn.Module):
         layers = []
         in_channels = 3
         width = self.img_width
-        for i, x in enumerate(cfg):
+        for x in cfg:
             if x == 'M':
                 layers += [nn.MaxPool2d(kernel_size=2, stride=2)]
                 width = width // 2
             else:
-                if i == 0:
-                    noise_layer = Noise(self.noise_init)
-                else:
-                    noise_layer = Noise(self.noise_inner)
-                layers += [noise_layer,
-                           nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
+                layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
                            nn.BatchNorm2d(x),
-                           nn.ReLU(inplace=True)]
+                           nn.ReLU(inplace=True),
+                           SAP(self.keep_ratio),
+                           ]
                 in_channels = x
         layers += [nn.AvgPool2d(kernel_size=width, stride=1)]
         return nn.Sequential(*layers)
 
+
 if __name__ == "__main__":
-    vgg = VGG("VGG11", 10, 0.8, 0.1)
+    vgg = VGG("VGG11", 10, 0.8)
     vgg.cuda()
     x = torch.randn(16, 3, 32, 32).cuda()
     vgg(x)
