@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from layers.sap import SAP
+from .layers.sap import SAP
 
 cfg = {
     'VGG11': [64, 'M', 128, 'M', 256, 256, 'M', 512, 512, 'M', 512, 512, 'M'],
@@ -36,9 +36,9 @@ class VGG(nn.Module):
                 width = width // 2
             else:
                 layers += [nn.Conv2d(in_channels, x, kernel_size=3, padding=1),
+                           SAP(self.keep_ratio),
                            nn.BatchNorm2d(x),
                            nn.ReLU(inplace=True),
-                           SAP(self.keep_ratio),
                            ]
                 in_channels = x
         layers += [nn.AvgPool2d(kernel_size=width, stride=1)]
@@ -46,7 +46,7 @@ class VGG(nn.Module):
 
 
 if __name__ == "__main__":
-    vgg = VGG("VGG11", 10, 0.8)
+    vgg = VGG("VGG16", 10, 1)
     vgg.cuda()
-    x = torch.randn(16, 3, 32, 32).cuda()
+    x = torch.randn(64, 3, 32, 32).cuda()
     vgg(x)
